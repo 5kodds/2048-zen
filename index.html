@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2048 Zen - Addictive Number Game</title>
+   
+    <script src="https://cdn.tailwindcss.com"></script>
+   
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+   
+    <!-- Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+
+    <style>
+        :root {
+            /* Default Zen Theme */
+            --bg-primary: #0f172a; --text-primary: #ffffff;
+            --bg-secondary: #1e293b; --text-secondary: #94a3b8;
+            --bg-grid-cell: rgba(51, 65, 85, 0.5);
+            --accent: #4f46e5; --accent-hover: #6366f1;
+           
+            /* Tile color variables will be set by JS */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .tile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            font-size: clamp(1.2rem, 4vw, 2.2rem);
+            /* This is the 3D effect! */
+            box-shadow:
+                inset 0 2px 2px rgba(255, 255, 255, 0.25), /* Inner highlight */
+                inset 0 -2px 2px rgba(0, 0, 0, 0.25), /* Inner shadow */
+                0 4px 8px rgba(0, 0, 0, 0.2); /* Drop shadow */
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* Text shadow for depth */
+        }
+       
+        @keyframes appear { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+        .new-tile { animation: appear 0.2s ease-in-out; }
+
+        @keyframes merge { 0% { transform: scale(1); } 50% { transform: scale(1.2) translateY(-5px); box-shadow: 0 8px 16px rgba(0,0,0,0.3); } 100% { transform: scale(1); } }
+        .merged-tile { animation: merge 0.2s ease-in-out; }
+
+        /* Custom styling for the message modal */
+        #message-modal-content {
+             box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md mx-auto">
+        <header class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-4xl font-black" style="color: var(--text-primary);">2048 Zen</h1>
+                <p style="color: var(--text-secondary);">Join the numbers and get to the 2048 tile!</p>
+            </div>
+            <div class="flex space-x-2">
+                <div class="p-3 rounded-lg text-center transition-colors" style="background-color: var(--bg-secondary);">
+                    <div class="text-xs font-bold transition-colors" style="color: var(--text-secondary);">SCORE</div>
+                    <div id="score" class="text-xl font-bold">0</div>
+                </div>
+                <div class="p-3 rounded-lg text-center transition-colors" style="background-color: var(--bg-secondary);">
+                    <div class="text-xs font-bold transition-colors" style="color: var(--text-secondary);">BEST</div>
+                    <div id="best-score" class="text-xl font-bold">0</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex justify-end mb-4 space-x-2">
+            <button id="theme-button" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                Themes
+            </button>
+            <button id="new-game-button" class="text-white font-bold py-2 px-4 rounded-lg" style="background-color: var(--accent); hover:background-color: var(--accent-hover);">
+                New Game
+            </button>
+        </div>
+
+        <div id="game-container" class="relative">
+            <div id="game-board" class="p-3 rounded-lg grid grid-cols-4 grid-rows-4 gap-3 aspect-square transition-colors" style="background-color: var(--bg-secondary);">
+                <script> for(let i=0;i<16;i++) document.write(`<div class="rounded-md transition-colors" style="background-color: var(--bg-grid-cell);"></div>`); </script>
+            </div>
+            <div id="tile-container" class="absolute inset-0 p-3"></div>
+            <div id="game-over-overlay" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex-col items-center justify-center rounded-lg text-center hidden">
+                <h2 class="text-5xl font-black text-white mb-2">Game Over!</h2>
+                <p class="text-slate-300 mb-4">You couldn't make another move.</p>
+                <button id="try-again-button" class="text-white font-bold py-3 px-6 rounded-lg text-lg" style="background-color: var(--accent);">
+                    Try Again
+                </button>
+            </div>
+        </div>
+       
+        <footer class="text-center mt-6 transition-colors" style="color: var(--text-secondary);">
+             <p><span class="font-bold">HOW TO PLAY:</span> Use <span class="font-bold">arrow keys</span> or <span class="font-bold">swipe</span> to move tiles.</p>
+        </footer>
+    </div>
+
+    <!-- Theme Selection Modal -->
+    <div id="theme-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md items-center justify-center z-50 hidden">
+        <div class="rounded-xl p-6 w-full max-w-lg" style="background-color: var(--bg-secondary);">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Select a Theme</h2>
+                <button id="close-theme-modal" class="text-slate-400 hover:text-white">
+                    <i data-feather="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="theme-options" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Theme options injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Message Modal -->
+    <div id="message-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md items-center justify-center z-50 hidden">
+        <div id="message-modal-content" class="rounded-xl p-8 w-full max-w-sm text-center" style="background-color: var(--bg-secondary);">
+            <p id="message-text" class="text-lg mb-6">This is where the payment flow would begin!</p>
+            <button id="close-message-modal" class="text-white font-bold py-2 px-6 rounded-lg" style="background-color: var(--accent);">
+                Got it
+            </button>
+        </div>
+    </div>
+   
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- DOM ELEMENTS & GAME STATE ---
+        const scoreEl = document.getElementById('score'), bestScoreEl = document.getElementById('best-score');
+        const tileContainer = document.getElementById('tile-container'), gameOverOverlay = document.getElementById('game-over-overlay');
+        const newGameBtn = document.getElementById('new-game-button'), tryAgainBtn = document.getElementById('try-again-button');
+        const themeBtn = document.getElementById('theme-button'), themeModal = document.getElementById('theme-modal');
+        const closeThemeModalBtn = document.getElementById('close-theme-modal'), themeOptionsContainer = document.getElementById('theme-options');
+        const messageModal = document.getElementById('message-modal'), messageText = document.getElementById('message-text'), closeMessageModalBtn = document.getElementById('close-message-modal');
+
+        const boardSize = 4;
+        let grid = [], score = 0, bestScore = 0, isGameOver = false, unlockedThemes = ['zen', 'mint', 'sunset']; // Default unlocked
+
+        // --- FIREBASE SETUP ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'zen-2048-game';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIza...", authDomain: "...", projectId: "..." };
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        let db, auth, userId, userDataDocRef;
+
+        // --- THEMES ---
+        const themes = {
+            zen: { name: 'Zen', price: 'Free',
+                colors: { '--bg-primary': '#0f172a', '--text-primary': '#ffffff', '--bg-secondary': '#1e293b', '--text-secondary': '#94a3b8', '--bg-grid-cell': 'rgba(51, 65, 85, 0.5)', '--accent': '#4f46e5', '--accent-hover': '#6366f1' },
+                tiles: { 2: '#e2e8f0', 4: '#cbd5e1', 8: '#facc15', 16: '#fb923c', 32: '#ef4444', 64: '#dc2626', 128: '#818cf8', 256: '#6366f1', 512: '#a855f7', 1024: '#9333ea', 2048: '#000000'},
+                text:  { 2: '#1e293b', 4: '#1e293b', 8: '#ffffff', 16: '#ffffff', 32: '#ffffff', 64: '#ffffff', 128: '#ffffff', 256: '#ffffff', 512: '#ffffff', 1024: '#ffffff', 2048: '#facc15'}
+            },
+            mint: { name: 'Mint', price: 'Free',
+                colors: { '--bg-primary': '#f0fdfa', '--text-primary': '#0f766e', '--bg-secondary': '#ccfbf1', '--text-secondary': '#115e59', '--bg-grid-cell': 'rgba(20, 184, 166, 0.1)', '--accent': '#0d9488', '--accent-hover': '#14b8a6' },
+                tiles: { 2: '#a7f3d0', 4: '#6ee7b7', 8: '#34d399', 16: '#10b981', 32: '#059669', 64: '#047857', 128: '#f472b6', 256: '#ec4899', 512: '#db2777', 1024: '#be185d', 2048: '#831843' },
+                text: { default: '#f0fdfa' }
+            },
+            sunset: { name: 'Sunset', price: 'Free',
+                colors: { '--bg-primary': '#450a0a', '--text-primary': '#fef2f2', '--bg-secondary': '#7f1d1d', '--text-secondary': '#fecaca', '--bg-grid-cell': 'rgba(254, 202, 202, 0.2)', '--accent': '#f59e0b', '--accent-hover': '#fcd34d' },
+                tiles: { 2: '#fecaca', 4: '#fca5a5', 8: '#f87171', 16: '#ef4444', 32: '#dc2626', 64: '#b91c1c', 128: '#fcd34d', 256: '#fbbf24', 512: '#f59e0b', 1024: '#d97706', 2048: '#b45309' },
+                text: { default: '#fef2f2', 2: '#7f1d1d', 4:'#7f1d1d', 8:'#7f1d1d' }
+            },
+            gemstone: { name: 'Gemstone', price: '$1.99',
+                colors: { '--bg-primary': '#262626', '--text-primary': '#f5f5f5', '--bg-secondary': '#404040', '--text-secondary': '#a3a3a3', '--bg-grid-cell': 'rgba(115, 115, 115, 0.2)', '--accent': '#a855f7', '--accent-hover': '#c084fc' },
+                tiles: { 2: 'linear-gradient(145deg, #a7f3d0, #34d399)', 4: 'linear-gradient(145deg, #a5b4fc, #6366f1)', 8: 'linear-gradient(145deg, #fca5a5, #ef4444)', 16: 'linear-gradient(145deg, #fcd34d, #f59e0b)', 32: 'linear-gradient(145deg, #f9a8d4, #ec4899)', 64: 'linear-gradient(145deg, #5eead4, #0d9488)', 128: 'linear-gradient(145deg, #c4b5fd, #8b5cf6)', 256: 'linear-gradient(145deg, #fda4af, #f43f5e)', 512: 'linear-gradient(145deg, #fdba74, #f97316)', 1024: 'linear-gradient(145deg, #d8b4fe, #a855f7)', 2048: 'linear-gradient(145deg, #fde047, #eab308)'},
+                text: { default: '#ffffff'}
+            }
+        };
+
+        function applyTheme(themeKey) {
+            const theme = themes[themeKey] || themes.zen;
+            Object.entries(theme.colors).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
+            localStorage.setItem('theme', themeKey); // Save for next time
+            renderBoard(); // Re-render board to apply new tile colors
+        }
+
+        async function saveUserData() {
+            if (!userDataDocRef) return;
+            const dataToSave = {
+                bestScore: bestScore,
+                selectedTheme: localStorage.getItem('theme') || 'zen',
+                unlockedThemes: unlockedThemes
+            };
+            try {
+                await setDoc(userDataDocRef, dataToSave, { merge: true });
+            } catch (error) { console.error("Error saving user data:", error); }
+        }
+
+        async function initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        const docPath = `/artifacts/${appId}/users/${userId}/gameData/userData`;
+                        userDataDocRef = doc(db, docPath);
+                        listenForUserData();
+                    } else {
+                        if (initialAuthToken) signInWithCustomToken(auth, initialAuthToken);
+                        else signInAnonymously(auth);
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase init failed:", error);
+                // Fallback to local storage if firebase fails
+                bestScore = parseInt(localStorage.getItem('bestScore')) || 0;
+                bestScoreEl.textContent = bestScore;
+                applyTheme(localStorage.getItem('theme') || 'zen');
+                startGame();
+            }
+        }
+
+        function listenForUserData() {
+            if (!userDataDocRef) return;
+            onSnapshot(userDataDocRef, docSnap => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    bestScore = data.bestScore || 0;
+                    unlockedThemes = data.unlockedThemes || ['zen', 'mint', 'sunset'];
+                    applyTheme(data.selectedTheme || 'zen');
+                } else { // First time user
+                    bestScore = 0;
+                    applyTheme('zen');
+                }
+                bestScoreEl.textContent = bestScore;
+                populateThemeModal(); // Re-populate with correct lock status
+            });
+            startGame();
+        }
+
+        function startGame() {
+            grid = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+            score = 0; isGameOver = false;
+            addRandomTile(); addRandomTile();
+            updateScoreUI();
+            gameOverOverlay.classList.add('hidden');
+        }
+
+        function renderBoard() {
+            tileContainer.innerHTML = '';
+            for (let i = 0; i < boardSize; i++) for (let j = 0; j < boardSize; j++) if (grid[i][j] !== 0) createTile(i, j, grid[i][j]);
+        }
+
+        function createTile(row, col, value, isNew = false, isMerged = false) {
+            const tile = document.createElement('div');
+            const themeKey = localStorage.getItem('theme') || 'zen';
+            const theme = themes[themeKey];
+
+            const background = theme.tiles[value] || (theme.tiles.default || '#334155');
+            const color = theme.text[value] || (theme.text.default || '#ffffff');
+           
+            tile.style.background = background;
+            tile.style.color = color;
+           
+            tile.className = 'tile absolute';
+            tile.style.width = `calc((100% - ${boardSize + 1} * 0.75rem) / ${boardSize})`;
+            tile.style.height = `calc((100% - ${boardSize + 1} * 0.75rem) / ${boardSize})`;
+            tile.style.top = `calc(${row} * (100% / ${boardSize}) + 0.75rem)`;
+            tile.style.left = `calc(${col} * (100% / ${boardSize}) + 0.75rem)`;
+            tile.textContent = value;
+            if (isNew) tile.classList.add('new-tile');
+            if (isMerged) tile.classList.add('merged-tile');
+            tileContainer.appendChild(tile);
+        }
+
+        function updateScoreUI() {
+            scoreEl.textContent = score;
+            if (score > bestScore) {
+                bestScore = score;
+                bestScoreEl.textContent = bestScore;
+            }
+        }
+
+        function addRandomTile() {
+            let empty = [];
+            grid.forEach((row, r) => row.forEach((val, c) => { if(val === 0) empty.push({r,c})}));
+            if(empty.length > 0) {
+                const {r,c} = empty[Math.floor(Math.random() * empty.length)];
+                grid[r][c] = Math.random() < 0.9 ? 2 : 4;
+                createTile(r, c, grid[r][c], true);
+            }
+        }
+
+        function handleInput(moveFn) {
+            if (isGameOver) return;
+            const moved = moveFn();
+            if (moved) {
+                renderBoard(); // First render shows movement
+                setTimeout(() => {
+                    addRandomTile(); // Add new tile after movement animation
+                    if (checkGameOver()) {
+                        isGameOver = true;
+                        saveUserData(); // Save final score
+                        gameOverOverlay.classList.remove('hidden');
+                        gameOverOverlay.classList.add('flex');
+                    }
+                }, 150);
+            }
+        }
+       
+        function move(direction) {
+            let moved = false;
+            let tempGrid = JSON.parse(JSON.stringify(grid)); // Deep copy
+
+            for (let i = 0; i < boardSize; i++) {
+                let line;
+                if(direction === 'up' || direction === 'down') line = tempGrid.map(row => row[i]);
+                else line = tempGrid[i];
+               
+                if(direction === 'right' || direction === 'down') line.reverse();
+
+                let filtered = line.filter(v => v !== 0);
+                for (let j = 0; j < filtered.length - 1; j++) {
+                    if (filtered[j] === filtered[j+1]) {
+                        filtered[j] *= 2;
+                        score += filtered[j];
+                        filtered.splice(j + 1, 1);
+                    }
+                }
+               
+                let newLine = Array(boardSize).fill(0);
+                filtered.forEach((v, idx) => newLine[idx] = v);
+
+                if(direction === 'right' || direction === 'down') newLine.reverse();
+
+                for(let k = 0; k < boardSize; k++) {
+                     if(direction === 'up' || direction === 'down') {
+                        if(grid[k][i] !== newLine[k]) moved = true;
+                        grid[k][i] = newLine[k];
+                     } else {
+                        if(grid[i][k] !== newLine[k]) moved = true;
+                        grid[i][k] = newLine[k];
+                     }
+                }
+            }
+            if(moved) updateScoreUI();
+            return moved;
+        }
+
+        function checkGameOver() {
+            for (let i = 0; i < boardSize; i++) for (let j = 0; j < boardSize; j++) {
+                if (grid[i][j] === 0) return false;
+                if (j < boardSize - 1 && grid[i][j] === grid[i][j + 1]) return false;
+                if (i < boardSize - 1 && grid[i][j] === grid[i + 1][j]) return false;
+            }
+            return true;
+        }
+
+        let touchStartX = 0, touchStartY = 0;
+        document.getElementById('game-container').addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, { passive: true });
+        document.getElementById('game-container').addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].screenX - touchStartX; const dy = e.changedTouches[0].screenY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) { if(Math.abs(dx) > 30) handleInput(() => move(dx > 0 ? 'right' : 'left')); }
+            else { if(Math.abs(dy) > 30) handleInput(() => move(dy > 0 ? 'down' : 'up')); }
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp') handleInput(() => move('up')); else if (e.key === 'ArrowDown') handleInput(() => move('down'));
+            else if (e.key === 'ArrowLeft') handleInput(() => move('left')); else if (e.key === 'ArrowRight') handleInput(() => move('right'));
+        });
+       
+        function populateThemeModal() {
+            themeOptionsContainer.innerHTML = '';
+            for (const [key, theme] of Object.entries(themes)) {
+                const isUnlocked = unlockedThemes.includes(key);
+                const isPremium = theme.price !== 'Free';
+               
+                const option = document.createElement('button');
+                option.className = 'text-left p-4 rounded-lg cursor-pointer border-2 transition-all transform hover:scale-105';
+                option.style.backgroundColor = theme.colors['--bg-primary'];
+                option.style.borderColor = isUnlocked ? theme.colors['--accent'] : 'transparent';
+                option.dataset.theme = key;
+
+                let priceTag = `<span class="font-bold" style="color: ${theme.colors['--accent']}">${theme.price}</span>`;
+                if(isPremium && !isUnlocked) {
+                    priceTag = `<span class="font-bold py-1 px-2 rounded" style="background-color: ${theme.colors['--accent']}; color: ${theme.colors['--bg-primary'] || '#fff'}">${theme.price} <i data-feather="lock" class="inline-block w-4 h-4 -mt-1"></i></span>`;
+                }
+
+                option.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-lg" style="color: ${theme.colors['--text-primary']}">${theme.name}</h3>
+                        ${priceTag}
+                    </div>
+                    <div class="flex space-x-2 mt-2">
+                        <div class="w-1/4 h-8 rounded" style="background: ${themes[key].tiles[8]}"></div>
+                        <div class="w-1/4 h-8 rounded" style="background: ${themes[key].tiles[64]}"></div>
+                        <div class="w-1/4 h-8 rounded" style="background: ${themes[key].tiles[512]}"></div>
+                    </div>
+                `;
+               
+                option.addEventListener('click', () => {
+                    if (isUnlocked) {
+                        applyTheme(key);
+                        themeModal.classList.add('hidden');
+                    } else {
+                        // --- PAYMENT INTEGRATION HOOK ---
+                        // This is where you would trigger your payment flow (e.g., with Stripe)
+                        messageText.innerHTML = `This is the placeholder for purchasing the <strong class="font-bold">${theme.name}</strong> theme for <strong class="font-bold">${theme.price}</strong>. After a real payment, this theme would be unlocked.`;
+                        messageModal.classList.remove('hidden');
+                        messageModal.classList.add('flex');
+
+                        // In a real scenario, after a successful payment callback from Stripe:
+                        // 1. Add 'gemstone' to the unlockedThemes array: unlockedThemes.push('gemstone');
+                        // 2. Save the updated user data: saveUserData();
+                        // 3. Apply the theme: applyTheme('gemstone');
+                        // 4. Close the modals.
+                    }
+                });
+                themeOptionsContainer.appendChild(option);
+            }
+            feather.replace();
+        }
+
+        // --- EVENT LISTENERS ---
+        newGameBtn.addEventListener('click', () => { startGame(); saveUserData(); });
+        tryAgainBtn.addEventListener('click', startGame);
+        themeBtn.addEventListener('click', () => { themeModal.classList.remove('hidden'); themeModal.classList.add('flex'); });
+        closeThemeModalBtn.addEventListener('click', () => themeModal.classList.add('hidden'));
+        closeMessageModalBtn.addEventListener('click', () => messageModal.classList.add('hidden'));
+       
+        window.onload = () => {
+            initializeFirebase();
+            feather.replace();
+        };
+
+    </script>
+</body>
+</html>
